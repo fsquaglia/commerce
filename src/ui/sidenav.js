@@ -1,23 +1,30 @@
 import Nav_links from "./nav_links";
 import Link from "next/link";
-import { IoLogoAngular } from "react-icons/io";
+import Image from "next/image";
+//import { PowerIcon } from "@heroicons/react/24/outline";
+import "./sidenav.css";
 
 export default function Sidenav() {
   return (
-    <div className="flex h-full flex-col px-3 py-4 md:px-2">
-      <p>Soy el sidenav</p>
+    <div className="responsive-container">
+      {/*Logo Comerncio con link a Home */}
       <Link
-        className="mb-2 flex h-20 items-end justify-start rounded-md p-4 md:h-40"
+        className="mb-2 flex items-end justify-center rounded-md p-4 "
         href="/"
       >
-        <div className="w-32 text-white md:w-40">
-          {/* Usar el tamaño correcto y clase de icono */}
-          <IoLogoAngular size={50} style={{ color: "red" }} />
+        <div>
+          {/* Icono a cambiar por el de Ihara y London */}
+          <Image
+            src="/images/logo_blanco01.png"
+            alt="Logo Ihara & London"
+            width={64}
+            height={64}
+            style={{ width: "64px", height: "64px" }}
+          />
         </div>
       </Link>
-      <div className="text-white">
-        <Nav_links />
-      </div>
+
+      <Nav_links />
     </div>
   );
 }
