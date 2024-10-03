@@ -10,6 +10,9 @@ import {
 } from "@/utils/local_session_storage.js/local_session_storage";
 import Swal from "sweetalert2";
 import SwitchPublished from "@/ui/SwitchPublished";
+import MultiSelect from "./MultiSelect";
+import ImageUpload from "./ImageUpload";
+import { doc, setDoc } from "firebase/firestore";
 
 //obtener la fecha de ayer en formato string AAAAMMDD
 function getYesterdayDate() {
@@ -34,7 +37,17 @@ const Section = ({ title, description, children }) => (
 );
 
 //data de las secciones
-const sections = (variations, onChange, values, onClickSwitch) => [
+const sections = (
+  variations,
+  onChange,
+  values,
+  onClickSwitch,
+  handleUpdateStock,
+  onClickSwitchPrecioVenta,
+  onClickSwitchOferta,
+  handleHashtagsChange,
+  handleUploadSuccess
+) => [
   {
     name: "Principal",
     id: 1,
@@ -82,6 +95,7 @@ const sections = (variations, onChange, values, onClickSwitch) => [
           placeHolder={"Modelo para esa Marca"}
           inputValue={values?.modelo || ""}
           onChange={onChange}
+          charLimit={20}
         />
         <InputCustom
           name={"color"}
@@ -100,7 +114,27 @@ const sections = (variations, onChange, values, onClickSwitch) => [
     id: 2,
     description: "Agrega una imagen a tu producto.",
     content: (
-      <p> Aquí irán los inputs y componentes para la sección de imagen </p>
+      <div>
+        <h1>Subir Imagen</h1>
+        <ImageUpload onUploadSuccess={handleUploadSuccess} />
+        <div className="flex gap-4 my-2">
+          {values?.imagen && values.imagen.length > 0 ? (
+            values.imagen.map((imgUrl, index) => (
+              <div key={index} className="w-1/2">
+                <img
+                  src={imgUrl}
+                  alt={`Imagen ${index + 1}`}
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            ))
+          ) : (
+            <p className="mx-auto text-slate-500 my-2">
+              No hay imágenes para mostrar
+            </p>
+          )}
+        </div>
+      </div>
     ),
   },
   {
@@ -118,15 +152,28 @@ const sections = (variations, onChange, values, onClickSwitch) => [
           onChange={onChange}
           showCharLimits={false}
         />
-        <InputCustom
-          name={"precioVenta"}
-          labelText={"Precio de venta "}
-          inputType={"number"}
-          placeHolder={"0"}
-          inputValue={values?.precioVenta || values?.precioCompra * 2 || 0}
-          onChange={onChange}
-          showCharLimits={false}
-        />
+
+        {/*! * */}
+        <div className="flex flex-row">
+          <div className="flex flex-col w-1/2">
+            <InputCustom
+              name={"precioVenta"}
+              labelText={"Precio de venta "}
+              inputType={"number"}
+              placeHolder={"0"}
+              inputValue={values?.precioVenta || values?.precioCompra * 2 || 0}
+              onChange={onChange}
+              showCharLimits={false}
+              disabled={values?.esPrecioVentaDeGrupo || false}
+            />
+          </div>
+          <SwitchVisible
+            switchLabel={"Precio venta de grupo "}
+            name={"esPrecioVentaDeGrupo"}
+            initialValue={values?.esPrecioVentaDeGrupo}
+            onToggle={onClickSwitchPrecioVenta}
+          />
+        </div>
         <InputCustom
           name={"fechaCompra"}
           labelText={"Fecha de compra AAAAMMDD "}
@@ -148,6 +195,7 @@ const sections = (variations, onChange, values, onClickSwitch) => [
         />
         <div className="my-4">
           <CustomSelect
+            updateStock={handleUpdateStock}
             options={variations?.talle || ["Genérico"]}
             quantities={
               values?.magnitudDisponible || [
@@ -174,19 +222,54 @@ const sections = (variations, onChange, values, onClickSwitch) => [
     description: "Agreguemos más información a tu producto",
     content: (
       <>
-        <InputCustom name={"extra1"} labelText={"Dato extra 1 "} />
-        <InputCustom name={"extra2"} labelText={"Dato extra 2 "} />
-        <SwitchVisible switchLabel={"En Oferta"} />
+        <InputCustom
+          name={"extra1"}
+          labelText={"Dato extra 1 "}
+          onChange={onChange}
+          inputValue={values?.extra1 || ""}
+          charLimit={40}
+          placeHolder={"Algún dato extra del producto?"}
+        />
+        <InputCustom
+          name={"extra2"}
+          labelText={"Dato extra 2 "}
+          onChange={onChange}
+          inputValue={values?.extra2 || ""}
+          charLimit={40}
+          placeHolder={"Otro dato extra del producto?"}
+        />
+        <SwitchVisible
+          switchLabel={"En Oferta"}
+          name={"enOferta"}
+          initialValue={values?.enOferta || false}
+          onToggle={onClickSwitchOferta}
+        />
         <InputCustom
           name={"porcentajeDescuentoOferta"}
           labelText={"Descuento (%) "}
           inputType={"number"}
+          showCharLimits={false}
+          inputValue={values?.porcentajeDescuentoOferta || 50}
+          onChange={onChange}
+          disabled={!values?.enOferta}
         />
         <InputCustom
           name={"productosRelacionados"}
           labelText={"Productos relacionados "}
+          onChange={onChange}
+          inputValue={values?.productosRelacionados || ""}
+          disabled={true}
         />
-        <InputCustom name={"hashtags"} labelText={"Hashtags# "} />
+
+        <MultiSelect
+          labelText="Hashtags#"
+          name="hashtags"
+          options={
+            variations?.hashtag || [{ value: "default", label: "Default" }]
+          }
+          defaultValue={values?.hashtags || []}
+          onChange={handleHashtagsChange}
+        />
       </>
     ),
   },
@@ -202,24 +285,28 @@ function ProductPage() {
     marca: "Genérico",
     modelo: "",
     color: "Genérico",
-    stockTotal: 0,
+    stockTotal: 1,
     extra1: "",
     extra2: "",
     fechaCompra: getYesterdayDate(),
     precioCompra: 0,
     precioVenta: 0,
+    esPrecioVentaDeGrupo: true,
     publicado: false,
     magnitudDisponible: [
       {
         magnitud: "Genérico",
         stock: 1,
       },
-      {
-        magnitud: "XL",
-        stock: 2,
-      },
     ],
     IDgrupoDeValores: 1,
+    productosRelacionados: [],
+    enOferta: false,
+    porcentajeDescuentoOferta: 0,
+    hashtags: ["#Ofertas"],
+    imagen: [
+      "https://firebasestorage.googleapis.com/v0/b/iharalondon.appspot.com/o/products%2F19562117-placer-feliz-mujer-libre-disfrutando-nature-girl-outdoor.jpg?alt=media&token=cd244e20-a574-482c-aa7f-fc483a8d1fc0",
+    ],
   });
 
   useEffect(() => {
@@ -238,18 +325,59 @@ function ProductPage() {
     getVariations();
   }, []);
 
+  //manejador de eventos del multiselect de los hashtags
+  const handleHashtagsChange = (selectedOptions) => {
+    setValues((prevValues) => ({
+      ...prevValues,
+      hashtags: selectedOptions.map((option) => option.value),
+    }));
+  };
+
+  //manejador de eventos de inputs y selects
   const onChange = (e) => {
     const { name, value } = e.target;
     setValues((prevValues) => ({ ...prevValues, [name]: value }));
   };
 
+  //manejador de stock y magnitudes (pasado al subcomponente)
+  const handleUpdateStock = (quantities, newStockTotal) => {
+    setValues((prevValues) => ({
+      ...prevValues,
+      magnitudDisponible: quantities,
+      stockTotal: newStockTotal,
+    }));
+  };
+
+  //eventos del conmutador Borrador / Publicado
   const onClickSwitch = (value) => {
     setValues((prevValues) => ({ ...prevValues, publicado: value }));
   };
 
+  //evento del conmutador de esPrecioVentaDeGrupo
+  const onClickSwitchPrecioVenta = (value) => {
+    setValues((prevValues) => ({
+      ...prevValues,
+      esPrecioVentaDeGrupo: value,
+    }));
+  };
+  //evento del conmutador de esPrecioVentaDeGrupo
+  const onClickSwitchOferta = (value) => {
+    setValues((prevValues) => ({
+      ...prevValues,
+      enOferta: value,
+    }));
+  };
+
+  //manejador de subida de imagen
+  const handleUploadSuccess = async (downloadURL) => {
+    console.log(downloadURL);
+    return;
+  };
+
+  //submit principal del formulario
   const onSubmitValues = async () => {
-    const code = await getCodeToUse();
-    values.codigoNro = code;
+    // const code = await getCodeToUse();
+    // values.codigoNro = code;
     console.log(values);
   };
 
@@ -274,7 +402,17 @@ function ProductPage() {
 
           {/* Aquí van los inputs y componentes de las secciones */}
           <div>
-            {sections(variations, onChange, values, onClickSwitch).map(
+            {sections(
+              variations,
+              onChange,
+              values,
+              onClickSwitch,
+              handleUpdateStock,
+              onClickSwitchPrecioVenta,
+              onClickSwitchOferta,
+              handleHashtagsChange,
+              handleUploadSuccess
+            ).map(
               (section) =>
                 openTab === section.id && (
                   <Section
