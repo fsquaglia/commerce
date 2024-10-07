@@ -111,6 +111,64 @@ export async function getDocConfig() {
     return null;
   }
 }
+//obtener un producto por su ID de Firestore (un producto de productos/categoria/subcat/poducto)
+export async function getProductByID(category, subcategory, idDocument) {
+  try {
+    if (!category || !subcategory || !idDocument) {
+      throw new Error(
+        "Todos los argumentos (categoría, subcategoría, idDocumento) son requeridos"
+      );
+    }
+
+    const docRef = doc(
+      firestoreDB,
+      "productos",
+      category,
+      subcategory,
+      idDocument
+    );
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+      return { docID: docSnap.id, ...docSnap.data() };
+    } else {
+      console.log("No such document!");
+      throw new Error("No encontramos el documento");
+    }
+  } catch (error) {
+    console.error("Error fetching document:", error);
+    throw error;
+  }
+}
+
+//actualizar datos de un producto según ID
+export async function updateProductByID(
+  category,
+  subcategory,
+  idDocument,
+  newData
+) {
+  try {
+    if (!category || !subcategory || !idDocument || !newData) {
+      throw new Error(
+        "Todos los argumentos (categoría, subcategoría, idDocumento, newData) son requeridos"
+      );
+    }
+
+    const docRef = doc(
+      firestoreDB,
+      "productos",
+      category,
+      subcategory,
+      idDocument
+    );
+    await setDoc(docRef, newData, { merge: true });
+    console.log("Producto actualizado correctamente.");
+  } catch (error) {
+    console.error("Error al actualizar el producto: ", error);
+    throw error;
+  }
+}
 
 //transacción de Firestore para actualizar el bloque de código para productos
 export const getUpdateCodeProd = async () => {
@@ -141,6 +199,18 @@ export const getUpdateCodeProd = async () => {
   }
 };
 
+//actualizar (update) un documento del una colección Firestore
+export async function updateDocInCollection(nameCollection, nameDoc, newData) {
+  try {
+    const docRef = doc(firestoreDB, nameCollection, nameDoc);
+    await setDoc(docRef, newData, { merge: true });
+    console.log("Documento actualizado correctamente.");
+  } catch (error) {
+    console.error("Error al actualizar el documento: ", error);
+    throw error;
+  }
+}
+
 //agregar un documento a una coleccion (ej. una categoría a colección productos, productos/categorias, colección/documento)
 export async function setDocInCollection(nameCollection, nameDoc, dataDoc) {
   try {
@@ -164,6 +234,7 @@ export async function createSubcollection(
         "Todos los argumentos (categoryID, nameSubCat, arrayIndexSubCat) son requeridos"
       );
     }
+
     // agregar el array índice al documento padre de Categoría
     const docCategoryRef = doc(firestoreDB, "productos", categoryID);
     await setDoc(
@@ -179,7 +250,12 @@ export async function createSubcollection(
       nameSubCat,
       "docBase"
     );
-    await setDoc(docSubCategoryRef, productBase);
+    const document = {
+      ...productBase,
+      categoria: categoryID,
+      subcategoria: nameSubCat,
+    };
+    await setDoc(docSubCategoryRef, document);
   } catch (error) {
     console.error(error);
     throw error;
@@ -339,27 +415,8 @@ export async function addNewProductFirestore(
   subCategoria = "",
   dataObject
 ) {
-  /*dataObject debe ser
-  {
-  Codigo_Nro:"",
-  Nombre:"Zapato de vestir caballero Milan"
-  Marca: "Puerto Blue",
-  Modelo: "Milan",
-  Imagen: ["urls imagenes"],
-  Color:["Negro", "Suela"],
-  Numero: ["42", "44"],
-  Talle: ["42", "44"],
-  Extra_1:"Algún dato extra",
-  Estra_2:"Algún dato extra 2",
-  FechaCompra: Timestamp.fromDate(new Date("2024-06-06")),
-  PrecioCompra: 100,
-  PrecioVenta: 200,
-  Publicado: true,
-  Stock: 1,
-  GrupoValores: "Zapatos PB",
-  *idProducto: productos/Caballeros/Calzado Caballeros/KIcFk5axys0ZpAuOHovr SOLO PARA TABLA DE OFERTAS
-  }
-  */
+  //dataObject debe como  productBase
+
   let ruta = coleccion; // Colección siempre es obligatoria
   if (categoria) {
     ruta += `/${categoria}`;
@@ -372,6 +429,7 @@ export async function addNewProductFirestore(
     // Agrega un nuevo doc a la colección "coleccion"
     const docRef = await addDoc(collection(firestoreDB, ruta), dataObject);
     console.log("Producto agregado: ", docRef.id);
+    return docRef;
   } catch (error) {
     console.error("Error al agregar producto: ", error);
     throw error;

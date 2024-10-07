@@ -13,6 +13,11 @@ import SwitchPublished from "@/ui/SwitchPublished";
 import MultiSelect from "./MultiSelect";
 import ImageUpload from "./ImageUpload";
 import { doc, setDoc } from "firebase/firestore";
+import {
+  getProductByID,
+  updateProductByID,
+} from "@/utils/firebase/fetchFirebase";
+import { set } from "zod";
 
 //obtener la fecha de ayer en formato string AAAAMMDD
 function getYesterdayDate() {
@@ -54,15 +59,29 @@ const sections = (
     description: "Comencemos por los datos principales del producto.",
     content: (
       <>
-        <InputCustom
-          name={"codigoNro"}
-          labelText={"Código "}
-          onChange={onChange}
-          inputValue={values?.codigoNro || ""}
-          charLimit={10}
-          placeHolder={"Se ingresará automático"}
-          disabled={true}
-        />
+        <div className="columns-2">
+          <div className="flex flex-col">
+            <InputCustom
+              name={"codigoNro"}
+              labelText={"Código "}
+              onChange={onChange}
+              inputValue={values?.codigoNro || ""}
+              charLimit={10}
+              placeHolder={"Se ingresará automático"}
+              disabled={true}
+            />
+          </div>
+          <div className="flex flex-col">
+            <InputCustom
+              name={"codigoAnterior"}
+              labelText={"Código anterior"}
+              onChange={onChange}
+              inputValue={values?.codigoAnterior || ""}
+              charLimit={10}
+              placeHolder={"Código del sistema anterior"}
+            />
+          </div>
+        </div>
         <InputCustom
           name={"nombre"}
           labelText={"Nombre del producto "}
@@ -115,8 +134,15 @@ const sections = (
     description: "Agrega una imagen a tu producto.",
     content: (
       <div>
-        <h1>Subir Imagen</h1>
-        <ImageUpload onUploadSuccess={handleUploadSuccess} />
+        {values?.imagen?.length >= 2 ? (
+          <div className="mx-auto bg-gray-200 p-1 text-center  my-1 text-red-400 rounded">
+            Llegaste al límite de dos imágenes, elimina alguna para poder subir
+            otra.
+          </div>
+        ) : (
+          <ImageUpload onUploadSuccess={handleUploadSuccess} />
+        )}
+
         <div className="flex gap-4 my-2">
           {values?.imagen && values.imagen.length > 0 ? (
             values.imagen.map((imgUrl, index) => (
@@ -275,11 +301,17 @@ const sections = (
   },
 ];
 
-function ProductPage() {
+function ProductPage({ params }) {
+  const [category, setCategory] = useState("");
+  const [subcategory, setSubcategory] = useState("");
+  const [productID, setProductID] = useState("");
   const [openTab, setOpenTab] = useState(1);
   const [variations, setVariations] = useState({});
   const [values, setValues] = useState({
     codigoNro: "",
+    codigoAnterior: "",
+    categoria: "",
+    subcategoria: "",
     nombre: "",
     detalle: "",
     marca: "Genérico",
@@ -302,14 +334,14 @@ function ProductPage() {
     IDgrupoDeValores: 1,
     productosRelacionados: [],
     enOferta: false,
-    porcentajeDescuentoOferta: 0,
-    hashtags: ["#Ofertas"],
-    imagen: [
-      "https://firebasestorage.googleapis.com/v0/b/iharalondon.appspot.com/o/products%2F19562117-placer-feliz-mujer-libre-disfrutando-nature-girl-outdoor.jpg?alt=media&token=cd244e20-a574-482c-aa7f-fc483a8d1fc0",
-    ],
+    porcentajeDescuentoOferta: 50,
+    hashtags: [],
+    imagen: [],
+    valoraciones: [],
   });
 
   useEffect(() => {
+    //cargar las variaciones del storage (o de la BDD) al state variations
     const getVariations = async () => {
       const variationsGet = await getVariationsFromStorage();
       setVariations(variationsGet);
@@ -322,7 +354,36 @@ function ProductPage() {
         });
       }
     };
+
+    //traer el producto de la BDD
+    const getProduct = async () => {
+      if (params?.slug) {
+        const decoded = params.slug.map((part) => decodeURIComponent(part));
+        const [category, subcategory, product] = decoded;
+        setCategory(category);
+        setSubcategory(subcategory);
+        setProductID(product);
+        try {
+          const productSelected = await getProductByID(
+            category,
+            subcategory,
+            product
+          );
+          //si no tiene código, asignarle uno
+          if (productSelected.codigoNro === "") {
+            const code = await getCodeToUse();
+            productSelected.codigoNro = code;
+          }
+          setValues(productSelected);
+        } catch (error) {
+          console.error("Error fetching product:", error);
+          setValues(null);
+        }
+      }
+    };
+
     getVariations();
+    getProduct();
   }, []);
 
   //manejador de eventos del multiselect de los hashtags
@@ -370,73 +431,89 @@ function ProductPage() {
 
   //manejador de subida de imagen
   const handleUploadSuccess = async (downloadURL) => {
-    console.log(downloadURL);
-    return;
+    setValues((prevValues) => ({
+      ...prevValues,
+      imagen: [...prevValues.imagen, downloadURL],
+    }));
   };
 
   //submit principal del formulario
   const onSubmitValues = async () => {
-    // const code = await getCodeToUse();
-    // values.codigoNro = code;
-    console.log(values);
+    try {
+      await updateProductByID(category, subcategory, productID, values);
+      alert("Producto actualizado");
+    } catch (error) {
+      console.error("Error updating product:", error);
+      alert("Error al actualizar el producto");
+    }
   };
 
   return (
     <div className="bg-gray-100 font-sans flex h-screen justify-center w-full">
-      <div className="py-8 w-full lg:w-3/4 xl:w-1/2">
-        <div className="w-full">
-          {/* Encabezado y Tabs con botones */}
-          <div className="mb-4 flex space-x-4 p-2 bg-white rounded-lg shadow-md">
-            {sections(variations).map((section) => (
-              <button
-                key={section.id}
-                onClick={() => setOpenTab(section.id)}
-                className={`flex-1 py-2 px-4 rounded-md focus:outline-none transition-all duration-300 ${
-                  openTab === section.id ? "bg-blue-600 text-white" : ""
-                }`}
-              >
-                {section.name}
-              </button>
-            ))}
+      {values ? (
+        <div className="py-8 w-full lg:w-3/4 xl:w-1/2">
+          <div className="flex items-center justify-center border rounded shadow my-2 bg-white">
+            <span className="text-xs text-slate-500 my-2">{`Categoría: ${category} - Subcategoría: ${subcategory} - Producto ID: ${productID}`}</span>
           </div>
+          <div className="w-full">
+            {/* Encabezado y Tabs con botones */}
+            <div className="mb-4 flex space-x-4 p-2 bg-white rounded-lg shadow-md">
+              {sections(variations).map((section) => (
+                <button
+                  key={section.id}
+                  onClick={() => setOpenTab(section.id)}
+                  className={`flex-1 py-2 px-4 rounded-md focus:outline-none transition-all duration-300 ${
+                    openTab === section.id ? "bg-blue-600 text-white" : ""
+                  }`}
+                >
+                  {section.name}
+                </button>
+              ))}
+            </div>
 
-          {/* Aquí van los inputs y componentes de las secciones */}
-          <div>
-            {sections(
-              variations,
-              onChange,
-              values,
-              onClickSwitch,
-              handleUpdateStock,
-              onClickSwitchPrecioVenta,
-              onClickSwitchOferta,
-              handleHashtagsChange,
-              handleUploadSuccess
-            ).map(
-              (section) =>
-                openTab === section.id && (
-                  <Section
-                    key={section.id}
-                    title={section.name}
-                    description={section.description}
-                  >
-                    {section.content}
-                  </Section>
-                )
-            )}
-          </div>
+            {/* Aquí van los inputs y componentes de las secciones */}
+            <div>
+              {sections(
+                variations,
+                onChange,
+                values,
+                onClickSwitch,
+                handleUpdateStock,
+                onClickSwitchPrecioVenta,
+                onClickSwitchOferta,
+                handleHashtagsChange,
+                handleUploadSuccess
+              ).map(
+                (section) =>
+                  openTab === section.id && (
+                    <Section
+                      key={section.id}
+                      title={section.name}
+                      description={section.description}
+                    >
+                      {section.content}
+                    </Section>
+                  )
+              )}
+            </div>
 
-          {/* Botón Guardar */}
-          <div className="mt-4 flex pb-2 bg-white rounded-lg shadow-md">
-            <div className="flex justify-center items-center mx-auto">
-              <ButtonDashboard
-                textButton={"Guardar"}
-                onclick={onSubmitValues}
-              />
+            {/* Botón Guardar */}
+            <div className="mt-4 flex pb-2 bg-white rounded-lg shadow-md">
+              <div className="flex justify-center items-center mx-auto">
+                <ButtonDashboard
+                  textButton={"Guardar"}
+                  onclick={onSubmitValues}
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mx-auto my-4">
+          Buscando el producto, si no lo encontramos deberás volver a
+          intentarlo...
+        </div>
+      )}
     </div>
   );
 }

@@ -329,20 +329,25 @@ export const categoriesProductsInitialData = [
 
 //? PRODUCTO BASE
 export const productBase = {
-  codigoNro: "", // Código único basado en el modelo y color
+  codigoNro: "",
+  codigoAnterior: "",
+  categoria: "",
+  subcategoria: "",
   nombre: "",
   detalle: "",
   marca: "Genérico",
   modelo: "",
   color: "Genérico",
-  imagen: [],
+  imagen: [
+    "https://firebasestorage.googleapis.com/v0/b/iharalondon.appspot.com/o/products%2FnoDisponible.png?alt=media&token=8f1273b7-f7d6-4179-8c8f-e1ff4ee6d871",
+  ],
   magnitudDisponible: [
     {
       magnitud: "Genérico",
-      stock: 0,
+      stock: 1,
     },
   ],
-  stockTotal: 0,
+  stockTotal: 1,
   extra1: "",
   extra2: "",
   fechaCompra: "",
@@ -353,7 +358,7 @@ export const productBase = {
   IDgrupoDeValores: 1, // Categoría o grupo al que pertenece
   productosRelacionados: [],
   enOferta: false,
-  porcentajeDescuentoOferta: 0,
+  porcentajeDescuentoOferta: 50,
   hashtags: [],
   valoraciones: [],
 };
@@ -512,4 +517,5 @@ export const dataConfigInitial = {
   codProdBloque: 15,
   coeficienteVenta: 1,
   multiplicadorCpraVta: 2.2,
+  precioVisibleRol: 0, //0: admin, 1: users, 2: visitors
 };
