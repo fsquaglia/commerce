@@ -29,6 +29,21 @@ function TypeShow({
         />
       );
     case "textarea":
+    // return (
+    //   <textarea
+    //     className="rounded-md border font-sans font-normal text-blue-gray-700 p-1 overflow-y-auto"
+    //     name={name}
+    //     placeholder={placeHolder}
+    //     value={inputValue}
+    //     onChange={onChange}
+    //     maxLength={charLimit}
+    //     id={`id${name}`}
+    //     rows="5"
+    //     cols="30"
+    //     disabled={disabled}
+    //   />
+    // );
+    case "area":
       return (
         <textarea
           className="rounded-md border font-sans font-normal text-blue-gray-700 p-1 overflow-y-auto"
@@ -38,7 +53,7 @@ function TypeShow({
           onChange={onChange}
           maxLength={charLimit}
           id={`id${name}`}
-          rows="5"
+          rows="3"
           cols="30"
           disabled={disabled}
         />
@@ -90,7 +105,7 @@ export default function InputCustom({
   return (
     <>
       <label
-        className="text-sm text-left ml-2 mb-1 text-gray-600"
+        className="text-xs text-left ml-2 mt-2 mb-1 text-gray-600"
         htmlFor={`id${name}`}
       >
         {labelText}
@@ -109,7 +124,7 @@ export default function InputCustom({
       />
 
       {showCharLimits && type !== "select" ? (
-        <span className="block text-right text-xs text-blue-gray-600 mt-1">
+        <span className="block text-right text-xs text-gray-600 my-1">
           {inputValue.length} de {charLimit}
         </span>
       ) : null}
