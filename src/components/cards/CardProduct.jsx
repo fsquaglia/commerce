@@ -8,8 +8,6 @@ function CardProduct({ product, category, subCategory }) {
   const { data: session, status } = useSession();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
-  console.log(product);
-
   // Función para cambiar la imagen al hacer clic en el botón
   const handleNextImage = () => {
     setCurrentImageIndex((prevIndex) =>
@@ -27,7 +25,7 @@ function CardProduct({ product, category, subCategory }) {
   };
 
   return (
-    <div className="container w-72  flex justify-center">
+    <div className="container w-72  flex justify-center h-fit">
       <div className="bg-white  shadow-lg  rounded transform hover:scale-105 duration-300 ease-in-out">
         {/*Imágenes del producto y LIKE */}
         <div className="relative">
@@ -39,28 +37,28 @@ function CardProduct({ product, category, subCategory }) {
             className="absolute top-0 right-0 m-2 cursor-pointer text-gray-500"
             size={25}
           />
+
           {product && product?.docData.imagen.length > 0 && (
             <Image
               src={product.docData.imagen[currentImageIndex]}
               alt={product.docData.nombre}
               width={300}
               height={300}
-              className="rounded-t"
-              objectFit="cover"
+              className="rounded-t object-cover"
             />
           )}
-        </div>
-        {/*-----Botón de cambio de imagen */}
-        {product?.docData.imagen.length > 1 && (
-          <div className="flex justify-around w-full transform -translate-y-5 px-4">
-            <div
-              className="rounded-full shadow w-10 h-10 flex justify-center items-center bg-gray-100 cursor-pointer"
-              onClick={handleNextImage}
-            >
-              <FaArrowRight />
+          {/*-----Botón de cambio de imagen */}
+          {product?.docData.imagen.length > 1 && (
+            <div className="absolute bottom-0 right-0">
+              <div
+                className="w-0 h-0 border-l-[50px] border-l-transparent border-b-[50px] border-b-emerald-100 flex justify-center items-center  cursor-pointer"
+                onClick={handleNextImage}
+              >
+                <FaArrowRight />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {/*-----Datos del producto----- */}
         <div className="p-2 text-center">
@@ -73,21 +71,22 @@ function CardProduct({ product, category, subCategory }) {
             )}
           </Link>
           {/*Precio de producto */}
-          <p className="font-light text-gray-500 text-lg my-2">29,99 &euro;</p>
+          {/* <p className="font-light text-gray-500 text-lg my-2">29,99 &euro;</p> */}
           {/*Detalle del producto */}
-          {product && (
+          {/* {product && (
             <p className="text-slate-600">
               {product?.docData.detalle.length > 60
                 ? product?.docData.detalle.slice(0, 60) + "..."
                 : product?.docData.detalle}
             </p>
-          )}
+          )} */}
+        </div>
+        <div>
           {/*Marca del producto */}
-
           {product && (
-            <p className="bg-gray-600 font-light text-slate-50 text-md my-2 mx-4 py-2 rounded hover:underline cursor-pointer">
+            <div className=" text-center bg-emerald-200 font-light text-slate-500 text-md w-full p-2">
               {product?.docData.marca}
-            </p>
+            </div>
           )}
 
           {/* <a

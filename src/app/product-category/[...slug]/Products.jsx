@@ -1,77 +1,118 @@
 "use client";
 import React, { useEffect, useState } from "react";
 import CardProduct from "@/components/cards/CardProduct";
-import { InfinitySpin } from "react-loader-spinner";
+import { getConfig } from "@/utils/local_session_storage.js/local_session_storage";
+import LoadingDiv from "@/ui/LoadingDiv";
+import MessageComponent from "@/ui/MessageComponent";
+
+const defaultProductsByPage = 2;
 
 function Products({ category, subCategory }) {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [lastVisible, setLastVisible] = useState(null);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [updateTotalPages, setUpdateTotalPages] = useState(false);
+
+  const fetchProducts = async (startAfter = null, reset = false) => {
+    try {
+      setLoading(true);
+      const configurations = await getConfig();
+      const url = new URL(
+        "/api/products/productsBySubCat",
+        window.location.origin
+      );
+      url.searchParams.append("categoria", encodeURIComponent(category));
+      url.searchParams.append("subcategoria", encodeURIComponent(subCategory));
+      url.searchParams.append(
+        "includeProductsWithoutStock",
+        configurations?.mostrarProductosSinStock || false
+      );
+      url.searchParams.append(
+        "limit",
+        Number(configurations?.productosPorPagina) || defaultProductsByPage
+      );
+
+      if (startAfter) {
+        url.searchParams.append("startAfter", startAfter);
+      }
+
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (res.ok && data && !data.hasOwnProperty("error")) {
+        const newProducts = data.products.filter(
+          (newProduct) =>
+            !products.some((prod) => prod.docID === newProduct.docID)
+        );
+
+        setProducts((prevProducts) =>
+          reset ? newProducts : [...prevProducts, ...newProducts]
+        );
+        setLastVisible(data.lastVisible);
+
+        if (!updateTotalPages) {
+          setTotalProducts(data?.totalDocs);
+          setUpdateTotalPages(true);
+        }
+      } else {
+        setProducts([]);
+      }
+    } catch (error) {
+      console.error("Error al obtener los productos: ", error);
+      setError("Ha ocurrido un error al obtener los productos...");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `/api/products/productsBySubCat?categoria=${category}&subcategoria=${subCategory}`
-        );
-        const data = await res.json();
+    setProducts([]); // Limpiar productos cuando cambia la categoría o subcategoría
+    fetchProducts(null, true);
+  }, [category, subCategory]);
 
-        if (data && !data.hasOwnProperty("error") && data.length > 0) {
-          setProducts(data);
-        } else {
-          setProducts([]); // Si no hay productos
-        }
-      } catch (error) {
-        console.error("Error al obtener los productos: ", error);
-        setError("Ha ocurrido un error al obtener los productos...");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchProducts();
-  }, [category, subCategory]); // Se vuelve a ejecutar cuando cambian 'category' o 'subCategory'
+  const handleLoadMore = () => {
+    fetchProducts(lastVisible);
+  };
 
   if (loading) {
-    return (
-      <div className="w-full min-h-screen bg-slate-50 text-center pt-20 flex justify-center">
-        <InfinitySpin
-          visible={true}
-          width="200"
-          color="#4fa94d"
-          ariaLabel="infinity-spin-loading"
-        />
-      </div>
-    );
+    return <LoadingDiv />;
   }
-
   if (error) {
-    return (
-      <div className="w-full min-h-screen bg-slate-50 text-center pt-20 flex justify-center">
-        {error}
-      </div>
-    );
+    return <MessageComponent message={error} type={"error"} />;
   }
-
   if (products.length === 0) {
     return (
-      <div className="text-gray-600 text-center my-12">
-        No hay productos para mostrar aún...
-      </div>
+      <MessageComponent
+        message={"No hay productos para mostrar aún..."}
+        type={"info"}
+      />
     );
   }
 
   return (
-    <div className="flex flex-row flex-wrap gap-6">
-      {products.map((product) => (
-        <CardProduct
-          key={product.docID}
-          product={product}
-          category={category}
-          subCategory={subCategory}
-        />
-      ))}
+    <div className="flex flex-col min-h-screen">
+      <div className="flex flex-row flex-wrap gap-6 flex-grow">
+        {products.map((product) => (
+          <CardProduct
+            key={product.docID}
+            product={product}
+            category={category}
+            subCategory={subCategory}
+          />
+        ))}
+      </div>
+      <div className="flex justify-center items-center mt-6">
+        {products.length < totalProducts && (
+          <button
+            onClick={handleLoadMore}
+            className="border rounded shadow-lg p-2 font-light text-slate-500 bg-emerald-200 hover:shadow-xl"
+          >
+            Mostrar más
+          </button>
+        )}
+      </div>
     </div>
   );
 }

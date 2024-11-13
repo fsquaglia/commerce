@@ -10,12 +10,12 @@ function SwitchVisible({ name, switchLabel, initialValue = false, onToggle }) {
 
   const handleToggle = () => {
     setIsOn(!isOn);
-    onToggle && onToggle(!isOn); // Notificar al componente padre
+    onToggle && onToggle(!isOn, name); // Notificar al componente padre
   };
 
   return (
     <div className="flex items-center gap-1">
-      <span className="text-xs text-left ml-2 mb-1 text-gray-600">
+      <span className="text-xs text-left ml-2 mb-1 text-gray-600 min-w-20">
         {switchLabel || "Visible en Home: "}
       </span>
       <label className="relative inline-flex cursor-pointer items-center">

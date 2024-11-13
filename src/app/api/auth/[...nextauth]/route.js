@@ -7,6 +7,8 @@ import {
 } from "@/utils/firebase/fetchFirebase";
 import bcrypt from "bcryptjs";
 import { Timestamp } from "firebase/firestore";
+import { newUserDataInitial } from "@/utils/SettingInitialData";
+import Swal from "sweetalert2";
 
 const handler = NextAuth({
   providers: [
@@ -95,28 +97,34 @@ const handler = NextAuth({
           // Si el usuario existe, asignar el rol al token
           token.id = foundUser.id;
           token.role = foundUser.rol;
+          token.email = foundUser.email;
+          token.image = foundUser.imagen;
         } else {
           // Si no existe, crear un nuevo usuario en Firestore y asignar un rol por defecto
-          const newUser = {
-            nombreContacto: profile.name || profile.email.split("@")[0],
-            sobrenombre: "",
-            direccion: "",
-            localidad: "",
-            provincia: "",
-            email: profile.email,
-            password: "",
-            celTE: "",
-            saldo: 0,
-            fechaVenceSaldo: Timestamp.fromDate(new Date("2024-12-31")),
-            rol: "user",
-            imagen: profile.picture || "",
-          };
-          //!agregar try catch
-          //función para agregar nuevo usuario
-          const userAdd = await addNewContactFirestore(newUser);
+          const nameProfile = profile.name || profile.email.split("@")[0];
+          const imageProfile = profile.picture || "";
+          const newUser = newUserDataInitial(
+            nameProfile,
+            profile.email,
+            "",
+            "user",
+            imageProfile
+          );
+          try {
+            //función para agregar nuevo usuario
+            const userAdd = await addNewContactFirestore(newUser);
 
-          token.id = userAdd;
-          token.role = "user";
+            token.id = userAdd;
+            token.role = "user";
+            token.email = profile.email;
+            token.image = imageProfile;
+            token.name = nameProfile;
+          } catch (error) {
+            console.error("Error creando usuario: ", error);
+
+            Swal.fire("Error al crear usuario", error.message, "error");
+            return null;
+          }
         }
       } else {
         // Si el usuario se autentica con credenciales, ya se añadió el rol en `user`
@@ -124,6 +132,8 @@ const handler = NextAuth({
           token.id = user.id;
           token.role = user.role;
           token.email = user.email;
+          token.image = user.image;
+          token.name = user.name;
         }
       }
 
@@ -141,6 +151,8 @@ const handler = NextAuth({
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.email = token.email;
+        session.user.image = token.image;
+        session.user.name = token.name;
       }
 
       return session;

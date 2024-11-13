@@ -1,4 +1,5 @@
 "use client";
+import { Timestamp } from "firebase/firestore";
 import { useState, useEffect } from "react";
 import InputCustom from "@/ui/InputCustom";
 import SwitchVisible from "@/ui/SwitchVisible";
@@ -7,6 +8,7 @@ import CustomSelect from "./StockBySize";
 import {
   getCodeToUse,
   getVariationsFromStorage,
+  getConfig,
 } from "@/utils/local_session_storage.js/local_session_storage";
 import Swal from "sweetalert2";
 import SwitchPublished from "@/ui/SwitchPublished";
@@ -14,6 +16,8 @@ import MultiSelect from "./MultiSelect";
 import ImageUpload from "./ImageUpload";
 import {
   getProductByID,
+  setIndexProduct,
+  updateDocInCollection,
   updateProductByID,
 } from "@/utils/firebase/fetchFirebase";
 
@@ -42,6 +46,7 @@ const Section = ({ title, description, children }) => (
 //data de las secciones
 const sections = (
   variations,
+  configurations,
   onChange,
   values,
   onClickSwitch,
@@ -150,29 +155,32 @@ const sections = (
                   src={imgUrl}
                   alt={`Imagen ${index + 1}`}
                   className="w-full h-auto object-cover"
-                  onLoad={(e) =>
-                    e.target.nextSibling.classList.remove("invisible")
-                  } // Mostrar botón al cargar la imagen
+                  onLoad={(e) => {
+                    e?.target.nextSibling &&
+                      e.target.nextSibling.classList.remove("invisible");
+                  }} // Mostrar botón al cargar la imagen
                 />
-                <button
-                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 invisible" // Inicialmente invisible
-                  onClick={() => handleDeleteImage(index)}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    strokeWidth={1.5}
-                    stroke="currentColor"
-                    className="w-6 h-6"
+                {values.imagen.length > 1 && (
+                  <button
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 invisible" // Inicialmente invisible
+                    onClick={() => handleDeleteImage(index)}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={1.5}
+                      stroke="currentColor"
+                      className="w-6 h-6"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 18L18 6M6 6l12 12"
+                      />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))
           ) : (
@@ -185,9 +193,9 @@ const sections = (
     ),
   },
   {
-    name: "Control stock",
+    name: "Stock",
     id: 3,
-    description: "Control de stock y magnitudes.",
+    description: "Control de stock, magnitudes y producto publicado.",
     content: (
       <>
         <InputCustom
@@ -200,15 +208,31 @@ const sections = (
           showCharLimits={false}
         />
 
-        {/*! * */}
-        <div className="flex flex-row">
-          <div className="flex flex-col w-1/2">
+        <div className="flex flex-row gap-2">
+          <div className="flex flex-col w-1/3">
             <InputCustom
               name={"precioVenta"}
               labelText={"Precio de venta "}
               inputType={"number"}
               placeHolder={"0"}
-              inputValue={values?.precioVenta || values?.precioCompra * 2 || 0}
+              inputValue={
+                values?.precioVenta ||
+                values?.precioCompra * configurations?.multiplicadorCpraVta ||
+                0
+              }
+              onChange={onChange}
+              showCharLimits={false}
+              disabled={values?.esPrecioVentaDeGrupo || false}
+            />
+          </div>
+
+          <div className="flex flex-col w-1/3">
+            <InputCustom
+              name={"descEfectPorc"}
+              labelText={"Descto pago Efect. "}
+              inputType={"number"}
+              placeHolder={"10"}
+              inputValue={values?.descEfectPorc}
               onChange={onChange}
               showCharLimits={false}
               disabled={values?.esPrecioVentaDeGrupo || false}
@@ -328,6 +352,7 @@ function ProductPage({ params }) {
   const [productID, setProductID] = useState("");
   const [openTab, setOpenTab] = useState(1);
   const [variations, setVariations] = useState({});
+  const [configurations, setConfigurations] = useState({});
   const [values, setValues] = useState({
     codigoNro: "",
     codigoAnterior: "",
@@ -344,6 +369,7 @@ function ProductPage({ params }) {
     fechaCompra: getYesterdayDate(),
     precioCompra: 0,
     precioVenta: 0,
+    descEfectPorc: 10,
     esPrecioVentaDeGrupo: true,
     publicado: false,
     magnitudDisponible: [
@@ -359,6 +385,7 @@ function ProductPage({ params }) {
     hashtags: [],
     imagen: [],
     valoraciones: [],
+    fechaModificado: Timestamp.fromDate(new Date()),
   });
 
   useEffect(() => {
@@ -371,6 +398,20 @@ function ProductPage({ params }) {
           position: "center",
           icon: "error",
           title: "Deberás configurar variaciones primero.",
+          showConfirmButton: true,
+        });
+      }
+    };
+
+    //cargar las configuraciones desde la BDD
+    const getConfigurations = async () => {
+      const configurationsGet = await getConfig();
+      setConfigurations(configurationsGet);
+      if (Object.keys(configurationsGet).length === 0) {
+        Swal.fire({
+          position: "center",
+          icon: "error",
+          title: "Deberás revisar las Configuraciones primero.",
           showConfirmButton: true,
         });
       }
@@ -402,7 +443,7 @@ function ProductPage({ params }) {
         }
       }
     };
-
+    getConfigurations();
     getVariations();
     getProduct();
   }, []);
@@ -473,19 +514,101 @@ function ProductPage({ params }) {
     console.log(values.imagen);
   };
 
+  //fn para actualizar documento de índice de Firestore con códigos de productos
+  const indexCodeProducts = async (nameIndex, values) => {
+    if (nameIndex === "indicePorArticuloProducto") {
+      try {
+        if (values?.codigoNro != "") {
+          //almacenar índice de código nuevo
+          await setIndexProduct(nameIndex, values.codigoNro, [
+            values.docID,
+            values.categoria,
+            values.subcategoria,
+            values.nombre,
+          ]);
+        }
+        if (values?.codigoAnterior != "") {
+          //almacenar índice de código anterior
+          await setIndexProduct(nameIndex, values.codigoAnterior, [
+            values.docID,
+            values.categoria,
+            values.subcategoria,
+            values.nombre,
+          ]);
+        }
+      } catch (error) {
+        Swal({
+          position: "center",
+          icon: "error",
+          title: "Error en documento de índices",
+          showConfirmButton: true,
+        });
+      }
+    }
+
+    if (nameIndex === "indicePorIdProducto") {
+      try {
+        if (values?.docID != "") {
+          //almacenar índice de código nuevo
+          await setIndexProduct(nameIndex, values.docID, [
+            values.categoria,
+            values.subcategoria,
+            values.nombre,
+            values.imagen[0],
+          ]);
+        }
+      } catch (error) {
+        Swal({
+          position: "center",
+          icon: "error",
+          title: "Error en documento de índices",
+          showConfirmButton: true,
+        });
+      }
+    }
+  };
+
   //submit principal del formulario
   const onSubmitValues = async () => {
+    if (values.publicado) {
+      //el producto se PUBLICA
+      //!AQUI HACER LAS VALIDACIONES DE LOS CAMPOS
+      alert("aquí hacer las validaciones");
+    }
+    const showMessage = values.publicado
+      ? "Producto actualizado y publicado"
+      : "Producto GUARDADO, no publicado";
+
     try {
+      //actualiza el producto en la colección productos/categ.../subcat..
       await updateProductByID(category, subcategory, productID, values);
-      alert("Producto actualizado");
+      //actualiza el producto en el índice por ARTICULO (para búsqueda de producto por artículo)
+      await indexCodeProducts("indicePorArticuloProducto", values);
+      //actualiza el producto en el índice (resumen) por ID de Firestore
+      await indexCodeProducts("indicePorIdProducto", values);
+      //actualiza el producto en la colección items (esto es experimental para manejar en un futuro de otra forma los productos)
+      await updateDocInCollection("items", productID, values);
+
+      Swal.fire({
+        position: "center",
+        icon: "success",
+        title: showMessage || "Error Ingresando datos",
+        showConfirmButton: false,
+        timer: 2000,
+      });
     } catch (error) {
       console.error("Error updating product:", error);
-      alert("Error al actualizar el producto");
+      Swal.fire({
+        position: "center",
+        icon: "error",
+        title: "Hubo un error",
+        showConfirmButton: true,
+      });
     }
   };
 
   return (
-    <div className="bg-gray-100 font-sans flex h-screen justify-center w-full">
+    <div className="font-sans flex min-h-screen justify-center w-full">
       {values ? (
         <div className="py-8 w-full lg:w-3/4 xl:w-1/2">
           <div className="flex items-center justify-center border rounded shadow my-2 bg-gray-700">
@@ -511,6 +634,7 @@ function ProductPage({ params }) {
             <div>
               {sections(
                 variations,
+                configurations,
                 onChange,
                 values,
                 onClickSwitch,
