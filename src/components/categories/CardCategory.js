@@ -1,6 +1,7 @@
 "use client";
 import ButtonGeneric from "../generic/ButtonGeneric";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 export default function CardCategory({
   id,
@@ -22,18 +23,21 @@ export default function CardCategory({
 
   return (
     <div
-      className={`relative w-80 h-96 text-white overflow-hidden shadow-lg m-6 transition-transform transform hover:shadow-2xl hover:scale-105 ${
+      className={`relative w-80 h-[500px] text-white overflow-hidden shadow-lg m-6 transition-transform transform hover:shadow-2xl hover:scale-105 ${
         bgColorTailwind || ""
       }`}
-      style={{ height: "500px" }}
     >
       {imageSrc && (
-        <img
+        <Image
           src={imageSrc}
           alt="Categoría Moda"
+          width={320}
+          height={500}
           className="absolute inset-0 w-full h-full object-cover"
+          priority
         />
       )}
+
       <div
         className={`absolute inset-0 bg-opacity-20 mix-blend-multiply ${bgColorTailwind}`}
       ></div>
