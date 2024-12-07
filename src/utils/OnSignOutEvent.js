@@ -5,8 +5,10 @@ export const onClickSignOut = () => {
   localStorage.removeItem("variations");
   localStorage.removeItem("codeProduct");
   localStorage.removeItem("configurations");
+  localStorage.removeItem("userData");
   sessionStorage.removeItem("variations");
   sessionStorage.removeItem("codeProduct");
   sessionStorage.removeItem("configurations");
+  sessionStorage.removeItem("userData");
   signOut();
 };
