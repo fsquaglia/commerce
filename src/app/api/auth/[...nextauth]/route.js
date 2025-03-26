@@ -30,44 +30,43 @@ const handler = NextAuth({
           placeholder: "******",
         },
       },
-      //authorize retorna el usuario logueado, o null
+      //authorize retorna el usuario logueado, o un error
       async authorize(credentials, req) {
         const { email, password } = credentials;
         try {
           //llamar a fetch de usuario en firestore
           const users = await getUserByEmail(email);
           //getUserByEmail devuelve un array de usuarios encontrados
-          if (users.length > 0) {
-            const user = users[0];
 
-            // Comparar la contraseña ingresada con la almacenada en la base de datos
-            const isValidPassword = await bcrypt.compare(
-              password,
-              user.password
-            );
-
-            if (!isValidPassword) {
-              return null; // Contraseña incorrecta
-            }
-
-            // Retorna los datos que deseas incluir en el token JWT
-            return {
-              id: user.id,
-              name: user.nombreContacto,
-              role: user.rol,
-              image: user.imagen,
-              email: user.email,
-            };
+          if (users.length === 0) {
+            throw new Error("El email no está registrado");
           }
 
-          //si no hay usuario devuelve null
-          return null;
+          const user = users[0];
+
+          // Comparar la contraseña ingresada con la almacenada en la base de datos
+          const isValidPassword = await bcrypt.compare(password, user.password);
+
+          if (!isValidPassword) {
+            throw new Error("La contraseña es incorrecta");
+          }
+
+          // Retorna los datos que deseas incluir en el token JWT
+          const userReturn = {
+            id: user.id,
+            name: user.nombreContacto,
+            role: user.rol,
+            image: user.imagen,
+            email: user.email,
+            verifiedUser: user.usuarioVerificado || false,
+            hasPhone: user.celTE?.trim() !== "",
+            hasBalance: user.saldo > 0,
+          };
+
+          return userReturn;
         } catch (error) {
-          console.error(
-            "Error durante la autenticación (Credenciales):",
-            error
-          );
-          return null;
+          console.error("Error en la autenticación:", error.message);
+          throw new Error(error.message); // Enviar mensaje de error a la UI
         }
       },
     }),
@@ -100,6 +99,10 @@ const handler = NextAuth({
           token.email = foundUser.email;
           token.image = foundUser.imagen;
           token.name = foundUser.nombreContacto;
+          token.verifiedUser = foundUser.usuarioVerificado || false;
+          token.hasPhone = foundUser.celTE?.trim() !== "";
+          token.hasBalance = foundUser.saldo > 0;
+          token.provider = "google";
         } else {
           // Si no existe, crear un nuevo usuario en Firestore y asignar un rol por defecto
           const nameProfile = profile.name || profile.email.split("@")[0];
@@ -109,7 +112,8 @@ const handler = NextAuth({
             profile.email,
             "",
             "user",
-            imageProfile
+            imageProfile,
+            true
           );
           try {
             //función para agregar nuevo usuario
@@ -120,6 +124,10 @@ const handler = NextAuth({
             token.email = profile.email;
             token.image = imageProfile;
             token.name = nameProfile;
+            token.verifiedUser = true;
+            token.hasPhone = false;
+            token.hasBalance = false;
+            token.provider = "google";
           } catch (error) {
             console.error("Error creando usuario: ", error);
 
@@ -135,6 +143,10 @@ const handler = NextAuth({
           token.email = user.email;
           token.image = user.image;
           token.name = user.name;
+          token.verifiedUser = user.verifiedUser || false;
+          token.hasPhone = user.hasPhone;
+          token.hasBalance = user.hasBalance;
+          token.provider = "credentials";
         }
       }
 
@@ -148,12 +160,15 @@ const handler = NextAuth({
           // Si session.user no está definido, lo inicializamos
           session.user = {};
         }
-
         session.user.id = token.id;
         session.user.role = token.role;
         session.user.email = token.email;
         session.user.image = token.image;
         session.user.name = token.name;
+        session.user.verifiedUser = token.verifiedUser || false;
+        session.user.hasPhone = token.hasPhone || false;
+        session.user.hasBalance = token.hasBalance || false;
+        session.user.provider = token.provider;
       }
 
       return session;

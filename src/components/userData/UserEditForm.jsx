@@ -5,7 +5,11 @@ import SwitchText from "@/ui/SwitchText";
 import ButtonDashboard from "@/ui/ButtonDashboard";
 import { useSession } from "next-auth/react";
 import Swal from "sweetalert2";
-import { updateDocInCollection } from "@/utils/firebase/fetchFirebase";
+import {
+  addEmailPromotional,
+  addEventToHistory,
+  updateDocInCollection,
+} from "@/utils/firebase/fetchFirebase";
 import { Timestamp } from "firebase/firestore";
 import LoadingDiv from "@/ui/LoadingDiv";
 import { BsQuestionCircleFill, BsFillCheckCircleFill } from "react-icons/bs";
@@ -14,6 +18,7 @@ import { imgSizing } from "@/utils/SettingSizing";
 import validateImage from "@/utils/ImageValidator";
 import Image from "next/image";
 import MessageComponent from "@/ui/MessageComponent";
+import { revalidateSomePath } from "@/utils/actions/actions";
 
 // Convertir la fecha de Timestamp al formato deseado
 const formatDate = (date) => {
@@ -86,6 +91,15 @@ function UserEditForm({ userData }) {
       });
       return;
     }
+    //Nombre debe tener más de 3 caracteres
+    if (user.nombreContacto.length < 3) {
+      Swal.fire({
+        icon: "error",
+        title: "Oops...",
+        text: "El nombre debe tener al menos 3 caracteres.",
+      });
+      return;
+    }
 
     //comprobar formato celular
     if (!/^\d{12}$/.test(user.celTE)) {
@@ -121,6 +135,19 @@ function UserEditForm({ userData }) {
         ...user,
         fechaNacimiento: date,
       });
+
+      //actualizar nombre en emailPromocionales
+      await addEmailPromotional(user.email, user.nombreContacto);
+      //agregar evento de actualización al historial
+      await addEventToHistory(
+        user.id,
+        user.email,
+        "Actualización",
+        "Actualizó sus datos",
+        user.id
+      );
+
+      revalidateSomePath("/dashboard/userManagement");
 
       Swal.fire({
         icon: "success",
@@ -194,21 +221,21 @@ function UserEditForm({ userData }) {
   };
 
   return (
-    <div className="container h-full bg-gray-200 p-2 md:p-8">
+    <div className="container h-full w-full bg-gray-200 p-2 md:p-8">
       {/*SECCION PRINCIPAL DE IMAGEN Y NOMBRE*/}
       <div className="bg-white rounded-lg shadow-xl pb-8">
         {/*imagen de fondo */}
-        <div className="w-full h-[250px]">
+        <div className="w-full h-40 sm:h-[250px]">
           <Image
             src="https://firebasestorage.googleapis.com/v0/b/iharalondon.appspot.com/o/images%2Fprofile-background.jpg?alt=media&token=c97b083a-6396-4967-99d1-998a33a98db5"
             alt="Profile background"
             width={1000}
             height={250}
-            style={{ width: "auto", height: "100%" }}
             className="w-full h-full rounded-tl-lg rounded-tr-lg object-cover"
-            priority={true}
+            priority
           />
         </div>
+
         {/*sección datos Imagen, nombre... */}
         <div className="flex flex-col items-center -mt-20">
           {user?.imagen && (
@@ -238,13 +265,21 @@ function UserEditForm({ userData }) {
             </div>
           )}
           <div className="flex items-center space-x-2 mt-2">
-            <p className="text-2xl">
-              {user?.nombreContacto || "Nombre y Apellido"}
+            <p className="text-base sm:text-2xl">
+              {user?.nombreContacto || "Anónimo"}
             </p>
-            {user?.nombreContacto.length < 3 ? (
-              <BsQuestionCircleFill size={20} className="text-blue-400" />
+            {user?.nombreContacto.length < 3 || !user?.usuarioVerificado ? (
+              <BsQuestionCircleFill
+                size={20}
+                className="text-blue-400"
+                title="Quizás debas validar tu email"
+              />
             ) : (
-              <BsFillCheckCircleFill size={20} className="text-green-600" />
+              <BsFillCheckCircleFill
+                size={20}
+                className="text-green-600"
+                title="Usuario verificado"
+              />
             )}
           </div>
           {/* <p className="text-gray-700">
@@ -299,101 +334,82 @@ function UserEditForm({ userData }) {
               Información Personal
             </h4>
             <ul className="mt-2 text-gray-700">
-              <li className="flex border-y py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Nombre y apellido: *</span>
-                  <InputCustom
-                    labelText=""
-                    name={"nombreContacto"}
-                    inputValue={user?.nombreContacto}
-                    charLimit={25}
-                    onChange={onChangeValue}
-                  />
-                </div>
-              </li>
-              <li className="flex border-b py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Celular: *</span>
-                  <InputCustom
-                    labelText=""
-                    name={"celTE"}
-                    inputValue={user?.celTE}
-                    charLimit={12}
-                    showCharLimits={false}
-                    placeHolder={"543408XXXXXX"}
-                    onChange={onChangeValue}
-                    inputType={"number"}
-                  />
-                </div>
-              </li>
-              <li className="flex border-b py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Dirección: *</span>
-                  <InputCustom
-                    labelText=""
-                    name={"direccion"}
-                    inputValue={user?.direccion}
-                    charLimit={30}
-                    placeHolder={"Calle y número"}
-                    onChange={onChangeValue}
-                  />
-                </div>
-              </li>
-              <li className="flex border-b py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Localidad: *</span>
-                  <InputCustom
-                    labelText=""
-                    name={"localidad"}
-                    inputValue={user?.localidad}
-                    charLimit={30}
-                    placeHolder={"Tu localidad"}
-                    onChange={onChangeValue}
-                  />
-                </div>
-              </li>
-              <li className="flex border-b py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Provincia: *</span>
-                  <InputCustom
-                    labelText=""
-                    name={"provincia"}
-                    inputValue={user?.provincia}
-                    charLimit={20}
-                    placeHolder={"Tu provincia"}
-                    onChange={onChangeValue}
-                  />
-                </div>
-              </li>
-              <li className="flex border-b py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Fecha de nacimiento:</span>
-                  <InputCustom
-                    labelText={""}
-                    name={"fechaNacimiento"}
-                    inputValue={user?.fechaNacimiento || ""}
-                    showCharLimits={false}
-                    placeHolder={"AAAA-MM-DD"}
-                    onChange={onChangeValue}
-                  />
-                </div>
-              </li>
-              <li className="flex border-b py-2">
-                <div className="flex flex-row flex-wrap gap-2 items-end">
-                  <span className="font-light w-40">Apodo:</span>
-                  <InputCustom
-                    labelText=""
-                    name={"sobrenombre"}
-                    inputValue={user?.sobrenombre}
-                    charLimit={15}
-                    placeHolder={"Simple apodo"}
-                    onChange={onChangeValue}
-                  />
-                </div>
-              </li>
+              <ListElement tag={"Nombre y apellido: *"}>
+                <InputCustom
+                  labelText=""
+                  name={"nombreContacto"}
+                  inputValue={user?.nombreContacto}
+                  charLimit={25}
+                  onChange={onChangeValue}
+                />
+              </ListElement>
+              <ListElement tag={"Celular: *"}>
+                <InputCustom
+                  labelText=""
+                  name={"celTE"}
+                  inputValue={user?.celTE}
+                  charLimit={12}
+                  showCharLimits={false}
+                  placeHolder={"543408XXXXXX"}
+                  onChange={onChangeValue}
+                  inputType={"number"}
+                />
+              </ListElement>
+              <ListElement tag={"Dirección: *"}>
+                <InputCustom
+                  labelText=""
+                  name={"direccion"}
+                  inputValue={user?.direccion}
+                  charLimit={30}
+                  placeHolder={"Calle y número"}
+                  onChange={onChangeValue}
+                />
+              </ListElement>
+              <ListElement tag={"Localidad: *"}>
+                <InputCustom
+                  labelText=""
+                  name={"localidad"}
+                  inputValue={user?.localidad}
+                  charLimit={30}
+                  placeHolder={"Tu localidad"}
+                  onChange={onChangeValue}
+                />
+              </ListElement>
+              <ListElement tag={"Provincia: *"}>
+                <InputCustom
+                  labelText=""
+                  name={"provincia"}
+                  inputValue={user?.provincia}
+                  charLimit={20}
+                  placeHolder={"Tu provincia"}
+                  onChange={onChangeValue}
+                />
+              </ListElement>
+              <ListElement tag={"Fecha de nacimiento:"}>
+                <InputCustom
+                  labelText={""}
+                  name={"fechaNacimiento"}
+                  inputValue={user?.fechaNacimiento || ""}
+                  showCharLimits={false}
+                  placeHolder={"AAAA-MM-DD"}
+                  onChange={onChangeValue}
+                />
+              </ListElement>
+
+              <ListElement tag={"Apodo:"}>
+                <InputCustom
+                  labelText=""
+                  name={"sobrenombre"}
+                  inputValue={user?.sobrenombre}
+                  charLimit={15}
+                  placeHolder={"Simple apodo"}
+                  onChange={onChangeValue}
+                />
+              </ListElement>
+
               {session?.user?.role === "admin" && (
-                <li className="flex border-b py-2">
-                  <div className="flex flex-row gap-2 items-end">
+                <li className="flex flex-col gap-2 border-b py-2">
+                  <div className="flex flex-col sm:flex-row gap-2 items-end">
                     <span className="font-light w-40">Rol del usuario:</span>
                     <div className="ms-4 w-48">
                       <SwitchText
@@ -403,6 +419,17 @@ function UserEditForm({ userData }) {
                         onClick={onSwitchChange}
                       />
                     </div>
+                  </div>
+                  <div className="flex flex-row flex-wrap gap-2 items-end">
+                    <span className="font-light w-40">Info privada:</span>
+                    <InputCustom
+                      labelText=""
+                      name={"privateInfo"}
+                      inputValue={user?.privateInfo || ""}
+                      charLimit={30}
+                      placeHolder={"Info Privada"}
+                      onChange={onChangeValue}
+                    />
                   </div>
                 </li>
               )}
@@ -467,105 +494,9 @@ function UserEditForm({ userData }) {
                 onclick={handleSubmit}
               />
             </div>
-            <span className="text-sm mx-auto my-2">
+            <span className="text-xs sm:text-sm mx-auto my-2 text-slate-500">
               * Indica campos obligatorios
             </span>
-          </div>
-          {/*seccion Actividad */}
-          <div className="flex-1 bg-white rounded-lg shadow-xl mt-4 p-8">
-            <h4 className="text-xl text-gray-900 font-bold">Activity log</h4>
-            <div className="relative px-4">
-              <div className="absolute h-full border border-dashed border-opacity-20 border-secondary"></div>
-
-              <div className="flex items-center w-full my-6 -ml-1.5">
-                <div className="w-1/12 z-10">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded-full"></div>
-                </div>
-                <div className="w-11/12">
-                  <p className="text-sm">Profile informations changed.</p>
-                  <p className="text-xs text-gray-500">3 min ago</p>
-                </div>
-              </div>
-
-              <div className="flex items-center w-full my-6 -ml-1.5">
-                <div className="w-1/12 z-10">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded-full"></div>
-                </div>
-                <div className="w-11/12">
-                  <p className="text-sm">
-                    Connected with{" "}
-                    <a href="#" className="text-blue-600 font-bold">
-                      Colby Covington
-                    </a>
-                    .
-                  </p>
-                  <p className="text-xs text-gray-500">15 min ago</p>
-                </div>
-              </div>
-
-              <div className="flex items-center w-full my-6 -ml-1.5">
-                <div className="w-1/12 z-10">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded-full"></div>
-                </div>
-                <div className="w-11/12">
-                  <p className="text-sm">
-                    Invoice{" "}
-                    <a href="#" className="text-blue-600 font-bold">
-                      #4563
-                    </a>{" "}
-                    was created.
-                  </p>
-                  <p className="text-xs text-gray-500">57 min ago</p>
-                </div>
-              </div>
-              <div className="flex items-center w-full my-6 -ml-1.5">
-                <div className="w-1/12 z-10">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded-full"></div>
-                </div>
-                <div className="w-11/12">
-                  <p className="text-sm">
-                    Message received from{" "}
-                    <a href="#" className="text-blue-600 font-bold">
-                      Cecilia Hendric
-                    </a>
-                    .
-                  </p>
-                  <p className="text-xs text-gray-500">1 hour ago</p>
-                </div>
-              </div>
-
-              <div className="flex items-center w-full my-6 -ml-1.5">
-                <div className="w-1/12 z-10">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded-full"></div>
-                </div>
-                <div className="w-11/12">
-                  <p className="text-sm">
-                    New order received{" "}
-                    <a href="#" className="text-blue-600 font-bold">
-                      #OR9653
-                    </a>
-                    .
-                  </p>
-                  <p className="text-xs text-gray-500">2 hours ago</p>
-                </div>
-              </div>
-
-              <div className="flex items-center w-full my-6 -ml-1.5">
-                <div className="w-1/12 z-10">
-                  <div className="w-3.5 h-3.5 bg-blue-600 rounded-full"></div>
-                </div>
-                <div className="w-11/12">
-                  <p className="text-sm">
-                    Message received from{" "}
-                    <a href="#" className="text-blue-600 font-bold">
-                      Jane Stillman
-                    </a>
-                    .
-                  </p>
-                  <p className="text-xs text-gray-500">2 hours ago</p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -574,3 +505,16 @@ function UserEditForm({ userData }) {
 }
 
 export default UserEditForm;
+
+function ListElement({ children, tag }) {
+  return (
+    <li className="flex border-b py-2 text-slate-700">
+      <div className="flex flex-row flex-wrap gap-2 items-end">
+        <span className="font-light w-40 text-sm sm:text-base">
+          {tag || ""}
+        </span>
+        {children}
+      </div>
+    </li>
+  );
+}

@@ -1,11 +1,16 @@
 import React, { useState } from "react";
 import { FaRegHeart, FaHeart, FaArrowRight } from "react-icons/fa";
-import { useSession } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 
-function CardProduct({ product, category, subCategory }) {
-  const { data: session, status } = useSession();
+function CardProduct({
+  product,
+  category,
+  subCategory,
+  isLiked,
+  likesCount,
+  onToggleLike,
+}) {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // Función para cambiar la imagen al hacer clic en el botón
@@ -15,28 +20,34 @@ function CardProduct({ product, category, subCategory }) {
     );
   };
 
-  //handle click corazzón de Like en producto
-  const handleLikeProduct = () => {
-    if (!session) {
-      alert("Debes iniciar sesión para marcar un producto como favorito");
-      return;
-    }
-    //!continuar con la lógica para saber si ya marcó este producto como favorito
-  };
-
   return (
     <div className="container w-72  flex justify-center h-fit">
-      <div className="bg-white  shadow-lg  rounded transform hover:scale-105 duration-300 ease-in-out">
+      <div className="bg-white  shadow-lg  rounded transform hover:drop-shadow-xl hover:shadow-emerald-200  duration-500 ease-in-out">
         {/*Imágenes del producto y LIKE */}
         <div className="relative">
           {/* <span className="absolute top-0 left-0 bg-yellow-500 text-white text-xs font-semibold py-1 px-2 rounded-br">
             New
           </span> */}
 
-          <FaRegHeart
-            className="absolute top-0 right-0 m-2 cursor-pointer text-gray-500"
-            size={25}
-          />
+          {likesCount > 0 && (
+            <div className="absolute top-0 left-0 text-sm font-semibold m-2 flex flex-row items-center h-8 gap-1">
+              <span className="text-slate-500">{likesCount}</span>
+              <FaHeart className="text-red-500" />
+            </div>
+          )}
+          <div className="absolute top-0 right-0 m-2 flex flex-row items-center justify-center h-8 text-lg">
+            <button
+              onClick={() =>
+                onToggleLike(
+                  product?.docID,
+                  product?.docData?.nombre,
+                  product?.docData?.imagen[0]
+                )
+              }
+            >
+              {isLiked ? "💖" : "🤍"}
+            </button>
+          </div>
 
           {product && product?.docData.imagen.length > 0 && (
             <Image
@@ -45,6 +56,7 @@ function CardProduct({ product, category, subCategory }) {
               width={300}
               height={300}
               className="rounded-t object-cover"
+              priority
             />
           )}
           {/*-----Botón de cambio de imagen */}

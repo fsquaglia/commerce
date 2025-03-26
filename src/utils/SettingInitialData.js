@@ -287,7 +287,8 @@ export const newUserDataInitial = (
   email,
   passwordHash,
   rolUser,
-  image
+  image,
+  usuarioVerificado = false
 ) => {
   return {
     nombreContacto: nombreContacto,
@@ -307,6 +308,8 @@ export const newUserDataInitial = (
       : "https://firebasestorage.googleapis.com/v0/b/iharalondon.appspot.com/o/images%2FUserGeneric.png?alt=media&token=46f36e6c-9009-4641-ae30-841df4a23cde",
     fechaVenceSaldo: Timestamp.fromDate(new Date("1900-01-01")),
     fechaNacimiento: null,
+    likesIDproductos: [],
+    usuarioVerificado: usuarioVerificado,
   };
 };
 
@@ -408,6 +411,7 @@ export const productBase = {
   valoraciones: [],
   fechaCreado: Timestamp.fromDate(new Date()),
   fechaModificado: Timestamp.fromDate(new Date()),
+  likesCount: 0,
 };
 
 //variaciones, como colores, talles, marcas, gruposValores, etc

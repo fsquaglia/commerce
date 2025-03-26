@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import Swal from "sweetalert2";
+import bcrypt from "bcryptjs";
 import {
   firestoreDB,
   realtimeDB,
@@ -19,6 +20,12 @@ import {
   runTransaction,
   startAfter,
   getCountFromServer,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+  increment,
+  writeBatch,
+  Timestamp,
 } from "firebase/firestore";
 
 import {
@@ -52,7 +59,190 @@ import {
   variationsInitialData1,
 } from "../SettingInitialData";
 
+import { revalidateSomePath } from "../actions/actions";
+
 //!FIRESTORE
+
+// Agregar un nuevo usuario al listado de emailsPromocionales
+export async function addEmailPromotional(email, nombre) {
+  try {
+    const docRef = doc(firestoreDB, "emailsPromocionales", "emailsActive");
+
+    // Construimos el objeto de actualización manualmente
+    const updateData = {};
+    updateData["users"] = {};
+    updateData["users"][email] = nombre;
+
+    await setDoc(docRef, updateData, { merge: true });
+    console.log("Email agregado con éxito.");
+  } catch (error) {
+    console.error("Error al agregar el email: ", error);
+    throw error;
+  }
+}
+
+// Agregar un LikeProduct a los likes de productos del usuario
+export async function likeProductToUser(
+  action = "add",
+  userID,
+  productID,
+  nameProduct,
+  category,
+  subcategory,
+  image
+) {
+  if (!userID || !productID || !nameProduct || !category || !subcategory) {
+    throw new Error(
+      "Todos los argumentos (userID, productID, nameProduct, category, subcategory) son requeridos"
+    );
+  }
+
+  const isAddAction = action === "add";
+  const arrayOperation = isAddAction ? arrayUnion : arrayRemove;
+  const likeIncrement = isAddAction ? 1 : -1;
+
+  try {
+    // Referencias a los documentos
+    const docRefLikesIdProductUser = doc(firestoreDB, `contactos/${userID}`);
+    const docRefLikeProductUser = doc(
+      firestoreDB,
+      `contactos/${userID}/LikesProduct/documentoDeLikes`
+    );
+    const docRefProduct = doc(firestoreDB, "items", productID);
+
+    // Detalle del nuevo like
+    const newLike = {
+      productID,
+      name: nameProduct,
+      category,
+      subcategory,
+      image: image || "",
+    };
+
+    // Actualizar lista de likes por ID
+    await updateDoc(docRefLikesIdProductUser, {
+      likesIDproductos: arrayOperation(productID),
+    });
+
+    // Actualizar lista de productos con detalles mínimos
+    await updateDoc(docRefLikeProductUser, {
+      likes: arrayOperation(newLike),
+    });
+
+    // Actualizar contador de likes del producto
+    await updateDoc(docRefProduct, {
+      likesCount: increment(likeIncrement),
+    });
+
+    console.log(
+      isAddAction ? "Like agregado con éxito." : "Like quitado con éxito."
+    );
+  } catch (error) {
+    console.error("Error al procesar el like del usuario: ", error);
+    throw error;
+  }
+}
+
+// Agregar un evento al historial general de la tienda
+// Función para obtener la fecha en la zona horaria del usuario
+const getFechaLocal = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Ajusta a la zona horaria local
+  return now.toISOString().split("T")[0]; // "2025-01-28"
+};
+// Función para obtener la hora en la zona horaria del usuario
+const getHoraLocal = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Ajusta a la zona horaria local
+  return now.toISOString(); // "2025-01-28T15:30:00.123Z"
+};
+
+export const addEventToHistory = async (
+  usuarioID,
+  nameEmail,
+  tipo,
+  detalles,
+  refID
+) => {
+  const fechaHoy = getFechaLocal(); // Fecha local del usuario
+  const horaLocal = getHoraLocal(); // Hora local del usuario
+
+  const dataEvent = {
+    nameEmail,
+    tipo,
+    fecha: horaLocal,
+    detalles,
+    refID,
+  };
+
+  try {
+    const docRef = doc(firestoreDB, "historial", fechaHoy);
+    // Usamos setDoc con merge: true para agregar el campo si no existe o actualizarlo si ya está.
+
+    // Actualizar el historial de acciones general para el administrador
+    await setDoc(
+      docRef,
+      {
+        [usuarioID]: arrayUnion(dataEvent),
+      },
+      { merge: true } // Garantiza que no se sobrescriba el documento existente.
+    );
+
+    //Actualizar el historial de acciones del usuario
+    const docRefUser = doc(
+      firestoreDB,
+      `contactos/${usuarioID}/historialAcciones/${fechaHoy}`
+    );
+    await setDoc(
+      docRefUser,
+      {
+        historialDiario: arrayUnion(dataEvent),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error("Error al registrar la acción:", error);
+  }
+};
+
+//?crear un batch de escritura para actualizar varios documentos en Firestore, en este caso para actualizar campos nuevos en los contactos ya dados de alta en la BDD FIrestore
+export const actualizarUsuarios = async () => {
+  try {
+    // Obtener todos los documentos de la colección "contactos"
+    const contactosSnapshot = await getDocs(
+      collection(firestoreDB, "contactos")
+    );
+
+    if (contactosSnapshot.empty) {
+      console.log("No se encontraron usuarios en la colección 'contactos'.");
+      return;
+    }
+
+    // Crear un batch para realizar las operaciones
+    const batch = writeBatch(firestoreDB);
+
+    contactosSnapshot.forEach((docSnapshot) => {
+      const userRef = doc(firestoreDB, "contactos", docSnapshot.id);
+
+      // Agregar el campo "usuarioVerificado"
+      batch.update(userRef, { usuarioVerificado: false });
+
+      // Crear la subcolección "historialAcciones/documentoDeAcciones"
+      const historialRef = doc(
+        firestoreDB,
+        `contactos/${docSnapshot.id}/historialAcciones/documentoDeAcciones`
+      );
+      batch.set(historialRef, { historialUsuario: [] });
+    });
+
+    // Confirmar el batch
+    await batch.commit();
+    console.log("Usuarios actualizados con éxito.");
+  } catch (error) {
+    console.error("Error al actualizar los usuarios:", error);
+  }
+};
+
 //crear documento de Configuraciones
 export async function createDocConfig() {
   try {
@@ -72,6 +262,24 @@ export async function createDocConfig() {
   }
 }
 
+//crear documento de historial de acciones
+export async function createDocHistory() {
+  try {
+    const docRef = doc(firestoreDB, "historial", "historial");
+    await setDoc(docRef, { acciones: [] });
+    // console.log("Documento de historial creado correctamente.");
+    Swal.fire({
+      icon: "success",
+      title: "Documento de historial creado correctamente.",
+      showConfirmButton: false,
+      position: "center",
+      timer: 2000,
+    });
+  } catch (error) {
+    console.error("Error al crear el documento de historial: ", error);
+    throw error;
+  }
+}
 //obtener todos los usuarios
 export async function getAllUsers(onlyBalances = false) {
   try {
@@ -111,12 +319,12 @@ export async function getAllUsers(onlyBalances = false) {
         return 0;
       });
     } else {
-      // Ordena los usuarios por rol y luego por email
+      // Ordena los usuarios por rol y luego por nombre
       users.sort((a, b) => {
         if (a.rol < b.rol) return -1;
         if (a.rol > b.rol) return 1;
-        if (a.email < b.email) return -1;
-        if (a.email > b.email) return 1;
+        if (a.nombreContacto < b.nombreContacto) return -1;
+        if (a.nombreContacto > b.nombreContacto) return 1;
         return 0;
       });
     }
@@ -126,6 +334,18 @@ export async function getAllUsers(onlyBalances = false) {
     console.error("Error en fetchFirebase al obtener los usuarios: ", error);
     throw new Error("Error en fetchFirebase al obtener los usuarios.");
   }
+}
+
+//obtener los X primeros documentos de una colección
+export async function getDocumentsOfCollection(collectionPath, totalDocuments) {
+  const querySnapshot = await getDocs(
+    query(collection(firestoreDB, collectionPath), limit(totalDocuments))
+  );
+  const documents = [];
+  querySnapshot.forEach((doc) => {
+    documents.push({ id: doc.id, ...doc.data() });
+  });
+  return documents;
 }
 
 //obtener un documento por su ID de una colección
@@ -360,6 +580,7 @@ export async function getProductByID(category, subcategory, idDocument) {
 }
 
 //actualizar datos de un producto según ID
+//lo actualizamos también en colección items
 export async function updateProductByID(
   category,
   subcategory,
@@ -380,7 +601,10 @@ export async function updateProductByID(
       subcategory,
       idDocument
     );
+    const docItemsRef = doc(firestoreDB, "items", idDocument);
+
     await setDoc(docRef, newData, { merge: true });
+    await setDoc(docItemsRef, newData, { merge: true });
     // console.log("Producto actualizado correctamente.");
   } catch (error) {
     console.error("Error al actualizar el producto: ", error);
@@ -449,6 +673,46 @@ export const setIndexProduct = async (nameIndex, code, productData) => {
   }
 };
 
+// transacción de Firestore para cambiar la contraseña actual del usuario
+export async function changePassword(userId, currentPassword, newPassword) {
+  const userDocRef = doc(firestoreDB, "contactos", userId);
+
+  try {
+    // Inicia una transacción
+    await runTransaction(firestoreDB, async (transaction) => {
+      const userDoc = await transaction.get(userDocRef);
+      if (!userDoc.exists()) {
+        throw new Error("Usuario no encontrado");
+      }
+
+      const storedHashedPassword = userDoc.data().password;
+
+      // Comparar la contraseña proporcionada con la almacenada (hasheada)
+      const isMatch = await bcrypt.compare(
+        currentPassword,
+        storedHashedPassword
+      );
+      if (!isMatch) {
+        throw new Error("La contraseña actual es incorrecta");
+      }
+
+      // Si la contraseña actual es correcta, actualizamos la contraseña
+      const hashedNewPassword = await bcrypt.hash(newPassword, 10); // Hashear la nueva contraseña
+
+      // Realizar la actualización
+      transaction.update(userDocRef, {
+        password: hashedNewPassword,
+      });
+    });
+
+    // console.log("Contraseña actualizada correctamente");
+  } catch (error) {
+    console.error("Error al cambiar la contraseña:", error);
+    throw error;
+  }
+}
+
+// actualizar información de un documento en una colección
 export async function updateDocInCollection(nameCollection, nameDoc, newData) {
   try {
     const docRef = doc(firestoreDB, nameCollection, nameDoc);
@@ -654,7 +918,7 @@ export async function setTipsFirestore() {
 }
 
 //?ESCRIBIR DATOS EN FIRESTORE
-//Agregar un nuevo CONTACTO/CLIENTE
+//Agregar un nuevo CONTACTO/CLIENTE/USUARIO
 export async function addNewContactFirestore(dataObject) {
   /*dataObject debe ser
   {nombreContacto:"Nombre Apellido",
@@ -665,7 +929,7 @@ export async function addNewContactFirestore(dataObject) {
   email:"",
   password:"",
   celTE:"",
-  saldo: 0,
+  saldo: 0,...
   }
   */
   try {
@@ -674,7 +938,27 @@ export async function addNewContactFirestore(dataObject) {
       collection(firestoreDB, "contactos"),
       dataObject
     );
-    // console.log("Contacto agregado: ", docRef.id);
+    //Agregar también la colección de likes inicializada en [], de aquí podremos mostrar los productos que le gustan al usuario
+    await setDoc(
+      doc(firestoreDB, `contactos/${docRef.id}/LikesProduct/documentoDeLikes`),
+      { likesProductos: [], misLikesCount: 0, likes: [] }
+    );
+
+    //Agregar evento de registro en el historial
+    await addEventToHistory(
+      docRef.id,
+      `${dataObject.nombreContacto || "Anónimo"} - (${dataObject.email})`,
+      "Registro",
+      "Se registró en la página",
+      docRef.id
+    );
+    //Agregar el nuevo email a la lista de emailsPromocionales
+    await addEmailPromotional(dataObject.email, dataObject.nombreContacto);
+
+    //revalidar la ruta de userManagement para que se revaliden los cambios
+    revalidateSomePath("/dashboard/userManagement");
+
+    console.log("Contacto agregado: ", docRef.id);
     return docRef.id;
   } catch (error) {
     console.error("Error al agregar contacto: ", error);

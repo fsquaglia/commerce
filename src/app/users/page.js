@@ -1,10 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import PendingCard from "./PendingCard";
 import { useSession } from "next-auth/react";
 import LoadingDiv from "@/ui/LoadingDiv";
 import MessageComponent from "@/ui/MessageComponent";
-import { set } from "firebase/database";
 
 export default function PageUsers() {
   const { data: session, status } = useSession();
@@ -65,14 +63,8 @@ export default function PageUsers() {
 
   return (
     <div className="flex flex-col  w-full">
-      {hasSaldo && (
-        <div className="border-b w-full">
-          <PendingCard
-            amount={user?.saldo || 0}
-            dataExpire={user?.fechaVenceSaldo || null}
-          />
-        </div>
-      )}
+      <p>Soy panel y deben refactorizarme, por favor aguarda un tiempo... </p>
+      {hasSaldo && <div className="border-b w-full"></div>}
     </div>
   );
 }

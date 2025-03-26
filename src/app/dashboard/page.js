@@ -12,6 +12,8 @@ import {
   addNewProductFirestore,
   setNodoRealtime,
   createDocConfig,
+  createDocHistory,
+  actualizarUsuarios,
 } from "../../utils/firebase/fetchFirebase";
 import {
   aboutInitialData,
@@ -21,8 +23,6 @@ import {
   teamInitialData,
   footerInitialData,
   contactInitialData,
-  dataContactInitial,
-  dataProductInitial,
   variationsInitialData1,
 } from "@/utils/SettingInitialData";
 import Swal from "sweetalert2";
@@ -179,6 +179,21 @@ export default function Page() {
         <ButtonGeneric
           textButton={"Configuraciones"}
           onClick={() => createDocConfig()}
+          fill={false}
+        />
+      </div>
+      <div>
+        <ButtonGeneric
+          textButton={"Crear doc Historial"}
+          onClick={() => createDocHistory()}
+          fill={false}
+        />
+      </div>
+
+      <div>
+        <ButtonGeneric
+          textButton={"Actualizar Usuarios"}
+          onClick={() => actualizarUsuarios()}
           fill={false}
         />
       </div>
